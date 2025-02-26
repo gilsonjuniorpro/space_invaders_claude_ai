@@ -63,6 +63,9 @@ class GameScreenState extends State<GameScreen> {
   final double enemyHorizontalSpacing = 50.0;
   final double enemyVerticalSpacing = 40.0;
 
+  // Focus node for keyboard input
+  final FocusNode _focusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +73,9 @@ class GameScreenState extends State<GameScreen> {
       screenWidth = MediaQuery.of(context).size.width;
       screenHeight = MediaQuery.of(context).size.height;
       startGame();
+
+      // Set focus to enable keyboard input
+      _focusNode.requestFocus();
     });
   }
 
@@ -272,246 +278,302 @@ class GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
+    _focusNode.dispose();
     if (gameTimer.isActive) {
       gameTimer.cancel();
     }
     super.dispose();
   }
 
+  // Handle key events
+  void _handleKeyEvent(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+        setState(() {
+          player.movingLeft = true;
+          player.movingRight = false;
+        });
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+        setState(() {
+          player.movingRight = true;
+          player.movingLeft = false;
+        });
+      } else if (event.logicalKey == LogicalKeyboardKey.space) {
+        firePlayerBullet();
+      }
+    } else if (event is RawKeyUpEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+        setState(() {
+          player.movingLeft = false;
+        });
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+        setState(() {
+          player.movingRight = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          GestureDetector(
-            onTap: () {
-              if (!gameRunning) {
-                startGame();
-              }
-            },
-            child: Stack(
-              children: [
-                // Draw player
-                Positioned(
-                  left: player.x,
-                  top: player.y,
-                  child: Container(
-                    width: player.width,
-                    height: player.height,
-                    color: Colors.green,
-                    child: const Center(
-                      child: Icon(
-                        Icons.arrow_upward,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Draw enemies
-                ...enemies.map((enemy) => Positioned(
-                  left: enemy.x,
-                  top: enemy.y,
-                  child: Container(
-                    width: enemy.width,
-                    height: enemy.height,
-                    color: Colors.red,
-                    child: const Center(
-                      child: Text(
-                        '👾',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                )),
-
-                // Draw bullets
-                ...bullets.map((bullet) => Positioned(
-                  left: bullet.x,
-                  top: bullet.y,
-                  child: Container(
-                    width: bullet.width,
-                    height: bullet.height,
-                    color: bullet.fromPlayer ? Colors.green : Colors.red,
-                  ),
-                )),
-
-                // Draw explosions
-                ...explosions.map((explosion) => Positioned(
-                  left: explosion.x - explosion.width / 2,
-                  top: explosion.y - explosion.height / 2,
-                  child: Opacity(
-                    opacity: 1 - (explosion.frameCount / 20),
+      // Wrap with RawKeyboardListener for keyboard controls
+      body: RawKeyboardListener(
+        focusNode: _focusNode,
+        onKey: _handleKeyEvent,
+        autofocus: true,
+        child: Stack(
+          children: [
+            GestureDetector(
+              onTap: () {
+                if (!gameRunning) {
+                  startGame();
+                }
+                // Ensure keyboard focus when tapping the screen
+                _focusNode.requestFocus();
+              },
+              child: Stack(
+                children: [
+                  // Draw player
+                  Positioned(
+                    left: player.x,
+                    top: player.y,
                     child: Container(
-                      width: explosion.width,
-                      height: explosion.height,
-                      decoration: const BoxDecoration(
-                        color: Colors.orange,
-                        shape: BoxShape.circle,
+                      width: player.width,
+                      height: player.height,
+                      color: Colors.green,
+                      child: const Center(
+                        child: Icon(
+                          Icons.arrow_upward,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),
-                )),
 
-                // Game UI
-                Positioned(
-                  top: 10,
-                  left: 10,
-                  child: Text(
-                    'Score: $score',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
+                  // Draw enemies
+                  ...enemies.map((enemy) => Positioned(
+                    left: enemy.x,
+                    top: enemy.y,
+                    child: Container(
+                      width: enemy.width,
+                      height: enemy.height,
+                      color: Colors.red,
+                      child: const Center(
+                        child: Text(
+                          '👾',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  )),
+
+                  // Draw bullets
+                  ...bullets.map((bullet) => Positioned(
+                    left: bullet.x,
+                    top: bullet.y,
+                    child: Container(
+                      width: bullet.width,
+                      height: bullet.height,
+                      color: bullet.fromPlayer ? Colors.green : Colors.red,
+                    ),
+                  )),
+
+                  // Draw explosions
+                  ...explosions.map((explosion) => Positioned(
+                    left: explosion.x - explosion.width / 2,
+                    top: explosion.y - explosion.height / 2,
+                    child: Opacity(
+                      opacity: 1 - (explosion.frameCount / 20),
+                      child: Container(
+                        width: explosion.width,
+                        height: explosion.height,
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  )),
+
+                  // Game UI
+                  Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Text(
+                      'Score: $score',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Text(
-                    'Lives: $lives Level: $level',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Text(
+                      'Lives: $lives Level: $level',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
-                ),
 
-                // Game over screen
-                if (!gameRunning)
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Game Over',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            shadows: [
-                              Shadow(
-                                color: Colors.redAccent.withOpacity(0.6),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
+                  // Keyboard controls info (visible on web)
+                  Positioned(
+                    bottom: 50,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Text(
+                        '← → to move, SPACE to fire',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 14,
                         ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Final Score: $score',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                        ElevatedButton(
-                          onPressed: startGame,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 16,
+                      ),
+                    ),
+                  ),
+
+                  // Game over screen
+                  if (!gameRunning)
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Game Over',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 48,
+                              fontWeight: FontWeight.bold,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.redAccent.withOpacity(0.6),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
                           ),
-                          child: const Text(
-                            'Play Again',
-                            style: TextStyle(fontSize: 18),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Final Score: $score',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Control buttons (positioned at the bottom of the screen)
-          if (gameRunning)
-            Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // Left button - using GestureDetector instead of ElevatedButton for better control
-                  GestureDetector(
-                    onTapDown: (_) {
-                      setState(() {
-                        player.movingLeft = true;
-                        player.movingRight = false;
-                      });
-                    },
-                    onTapUp: (_) {
-                      setState(() {
-                        player.movingLeft = false;
-                      });
-                    },
-                    onTapCancel: () {
-                      setState(() {
-                        player.movingLeft = false;
-                      });
-                    },
-                    child: Container(
-                      width: 70,
-                      height: 70,
-                      decoration: const BoxDecoration(
-                        color: Colors.blue,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.arrow_back,
-                          color: Colors.white,
-                          size: 30,
-                        ),
+                          const SizedBox(height: 40),
+                          ElevatedButton(
+                            onPressed: startGame,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 16,
+                              ),
+                            ),
+                            child: const Text(
+                              'Play Again',
+                              style: TextStyle(fontSize: 18),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-
-                  // Right button - using GestureDetector instead of ElevatedButton
-                  GestureDetector(
-                    onTapDown: (_) {
-                      setState(() {
-                        player.movingRight = true;
-                        player.movingLeft = false;
-                      });
-                    },
-                    onTapUp: (_) {
-                      setState(() {
-                        player.movingRight = false;
-                      });
-                    },
-                    onTapCancel: () {
-                      setState(() {
-                        player.movingRight = false;
-                      });
-                    },
-                    child: Container(
-                      width: 70,
-                      height: 70,
-                      decoration: const BoxDecoration(
-                        color: Colors.blue,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.arrow_forward,
-                          color: Colors.white,
-                          size: 30,
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
-        ],
+
+            // Control buttons (positioned at the bottom of the screen)
+            if (gameRunning)
+              Positioned(
+                bottom: 20,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Left button - using GestureDetector instead of ElevatedButton for better control
+                    GestureDetector(
+                      onTapDown: (_) {
+                        setState(() {
+                          player.movingLeft = true;
+                          player.movingRight = false;
+                          _focusNode.requestFocus(); // Maintain keyboard focus
+                        });
+                      },
+                      onTapUp: (_) {
+                        setState(() {
+                          player.movingLeft = false;
+                        });
+                      },
+                      onTapCancel: () {
+                        setState(() {
+                          player.movingLeft = false;
+                        });
+                      },
+                      child: Container(
+                        width: 70,
+                        height: 70,
+                        decoration: const BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Right button - using GestureDetector instead of ElevatedButton
+                    GestureDetector(
+                      onTapDown: (_) {
+                        setState(() {
+                          player.movingRight = true;
+                          player.movingLeft = false;
+                          _focusNode.requestFocus(); // Maintain keyboard focus
+                        });
+                      },
+                      onTapUp: (_) {
+                        setState(() {
+                          player.movingRight = false;
+                        });
+                      },
+                      onTapCancel: () {
+                        setState(() {
+                          player.movingRight = false;
+                        });
+                      },
+                      child: Container(
+                        width: 70,
+                        height: 70,
+                        decoration: const BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.arrow_forward,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
