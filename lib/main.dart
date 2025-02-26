@@ -55,6 +55,7 @@ class GameScreenState extends State<GameScreen> {
   late Timer gameTimer;
   int enemyMovementDirection = 1;
   int tickCounter = 0;
+  int autoFireCounter = 0;
 
   // Enemy formation parameters
   final int enemyRows = 4;
@@ -82,6 +83,7 @@ class GameScreenState extends State<GameScreen> {
       score = 0;
       lives = 3;
       level = 1;
+      autoFireCounter = 0;
 
       // Create enemy formation
       createEnemies();
@@ -106,10 +108,27 @@ class GameScreenState extends State<GameScreen> {
     }
   }
 
+  void firePlayerBullet() {
+    bullets.add(Bullet(
+      player.x + player.width / 2 - 1.5,
+      player.y,
+      3,
+      10,
+      true,
+    ));
+  }
+
   void gameLoop(Timer timer) {
     if (!gameRunning) return;
 
     tickCounter++;
+    autoFireCounter++;
+
+    // Auto-fire bullet every second (approximately 60 ticks at 16ms per tick)
+    if (autoFireCounter >= 20) {
+      firePlayerBullet();
+      autoFireCounter = 0;
+    }
 
     // Update player
     if (player.movingLeft && player.x > 0) {
@@ -263,189 +282,236 @@ class GameScreenState extends State<GameScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onPanStart: (details) {
-          if (!gameRunning) {
-            startGame();
-            return;
-          }
-
-          double touchX = details.localPosition.dx;
-          if (touchX < screenWidth / 2) {
-            player.movingLeft = true;
-            player.movingRight = false;
-          } else {
-            player.movingLeft = false;
-            player.movingRight = true;
-          }
-        },
-        onPanUpdate: (details) {
-          double touchX = details.localPosition.dx;
-          if (touchX < screenWidth / 2) {
-            player.movingLeft = true;
-            player.movingRight = false;
-          } else {
-            player.movingLeft = false;
-            player.movingRight = true;
-          }
-        },
-        onPanEnd: (details) {
-          player.movingLeft = false;
-          player.movingRight = false;
-        },
-        onTap: () {
-          if (!gameRunning) {
-            startGame();
-            return;
-          }
-
-          // Fire bullet
-          bullets.add(Bullet(
-            player.x + player.width / 2 - 1.5,
-            player.y,
-            3,
-            10,
-            true,
-          ));
-        },
-        child: Stack(
-          children: [
-            // Draw player
-            Positioned(
-              left: player.x,
-              top: player.y,
-              child: Container(
-                width: player.width,
-                height: player.height,
-                color: Colors.green,
-                child: const Center(
-                  child: Icon(
-                    Icons.arrow_upward,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-
-            // Draw enemies
-            ...enemies.map((enemy) => Positioned(
-              left: enemy.x,
-              top: enemy.y,
-              child: Container(
-                width: enemy.width,
-                height: enemy.height,
-                color: Colors.red,
-                child: const Center(
-                  child: Text(
-                    '👾',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                ),
-              ),
-            )),
-
-            // Draw bullets
-            ...bullets.map((bullet) => Positioned(
-              left: bullet.x,
-              top: bullet.y,
-              child: Container(
-                width: bullet.width,
-                height: bullet.height,
-                color: bullet.fromPlayer ? Colors.green : Colors.red,
-              ),
-            )),
-
-            // Draw explosions
-            ...explosions.map((explosion) => Positioned(
-              left: explosion.x - explosion.width / 2,
-              top: explosion.y - explosion.height / 2,
-              child: Opacity(
-                opacity: 1 - (explosion.frameCount / 20),
-                child: Container(
-                  width: explosion.width,
-                  height: explosion.height,
-                  decoration: const BoxDecoration(
-                    color: Colors.orange,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            )),
-
-            // Game UI
-            Positioned(
-              top: 10,
-              left: 10,
-              child: Text(
-                'Score: $score',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-            Positioned(
-              top: 10,
-              right: 10,
-              child: Text(
-                'Lives: $lives Level: $level',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-
-            // Game over screen
-            if (!gameRunning)
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Game Over',
-                      style: TextStyle(
-                        color: Colors.red,
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            color: Colors.redAccent.withOpacity(0.6),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Final Score: $score',
-                      style: const TextStyle(
+      body: Stack(
+        children: [
+          GestureDetector(
+            onTap: () {
+              if (!gameRunning) {
+                startGame();
+              }
+            },
+            child: Stack(
+              children: [
+                // Draw player
+                Positioned(
+                  left: player.x,
+                  top: player.y,
+                  child: Container(
+                    width: player.width,
+                    height: player.height,
+                    color: Colors.green,
+                    child: const Center(
+                      child: Icon(
+                        Icons.arrow_upward,
                         color: Colors.white,
-                        fontSize: 24,
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(height: 40),
-                    ElevatedButton(
-                      onPressed: startGame,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 16,
+                  ),
+                ),
+
+                // Draw enemies
+                ...enemies.map((enemy) => Positioned(
+                  left: enemy.x,
+                  top: enemy.y,
+                  child: Container(
+                    width: enemy.width,
+                    height: enemy.height,
+                    color: Colors.red,
+                    child: const Center(
+                      child: Text(
+                        '👾',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                )),
+
+                // Draw bullets
+                ...bullets.map((bullet) => Positioned(
+                  left: bullet.x,
+                  top: bullet.y,
+                  child: Container(
+                    width: bullet.width,
+                    height: bullet.height,
+                    color: bullet.fromPlayer ? Colors.green : Colors.red,
+                  ),
+                )),
+
+                // Draw explosions
+                ...explosions.map((explosion) => Positioned(
+                  left: explosion.x - explosion.width / 2,
+                  top: explosion.y - explosion.height / 2,
+                  child: Opacity(
+                    opacity: 1 - (explosion.frameCount / 20),
+                    child: Container(
+                      width: explosion.width,
+                      height: explosion.height,
+                      decoration: const BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                )),
+
+                // Game UI
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Text(
+                    'Score: $score',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Text(
+                    'Lives: $lives Level: $level',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+
+                // Game over screen
+                if (!gameRunning)
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Game Over',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                            shadows: [
+                              Shadow(
+                                color: Colors.redAccent.withOpacity(0.6),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Final Score: $score',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                          ),
+                        ),
+                        const SizedBox(height: 40),
+                        ElevatedButton(
+                          onPressed: startGame,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 16,
+                            ),
+                          ),
+                          child: const Text(
+                            'Play Again',
+                            style: TextStyle(fontSize: 18),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Control buttons (positioned at the bottom of the screen)
+          if (gameRunning)
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Left button - using GestureDetector instead of ElevatedButton for better control
+                  GestureDetector(
+                    onTapDown: (_) {
+                      setState(() {
+                        player.movingLeft = true;
+                        player.movingRight = false;
+                      });
+                    },
+                    onTapUp: (_) {
+                      setState(() {
+                        player.movingLeft = false;
+                      });
+                    },
+                    onTapCancel: () {
+                      setState(() {
+                        player.movingLeft = false;
+                      });
+                    },
+                    child: Container(
+                      width: 70,
+                      height: 70,
+                      decoration: const BoxDecoration(
+                        color: Colors.blue,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: 30,
                         ),
                       ),
-                      child: const Text(
-                        'Play Again',
-                        style: TextStyle(fontSize: 18),
+                    ),
+                  ),
+
+                  // Right button - using GestureDetector instead of ElevatedButton
+                  GestureDetector(
+                    onTapDown: (_) {
+                      setState(() {
+                        player.movingRight = true;
+                        player.movingLeft = false;
+                      });
+                    },
+                    onTapUp: (_) {
+                      setState(() {
+                        player.movingRight = false;
+                      });
+                    },
+                    onTapCancel: () {
+                      setState(() {
+                        player.movingRight = false;
+                      });
+                    },
+                    child: Container(
+                      width: 70,
+                      height: 70,
+                      decoration: const BoxDecoration(
+                        color: Colors.blue,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.arrow_forward,
+                          color: Colors.white,
+                          size: 30,
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
