@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,9 +35,9 @@ class GameScreen extends StatefulWidget {
   GameScreenState createState() => GameScreenState();
 }
 
-class GameScreenState extends State<GameScreen> {
+class GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   // Game objects
-  late Player player;
+  Player player = Player(0, 0, 50, 30); // Initialize with default values
   List<Enemy> enemies = [];
   List<Bullet> bullets = [];
   List<Explosion> explosions = [];
@@ -48,18 +49,18 @@ class GameScreenState extends State<GameScreen> {
   int level = 1;
 
   // Game dimensions
-  late double screenWidth;
-  late double screenHeight;
+  double screenWidth = 0;
+  double screenHeight = 0;
 
   // Game timing
-  late Timer gameTimer;
+  Timer? gameTimer;
   int enemyMovementDirection = 1;
   int tickCounter = 0;
   int autoFireCounter = 0;
 
   // Enemy formation parameters
   final int enemyRows = 4;
-  final int enemyCols = 8;
+  int enemyCols = 8; // Fixed: provide default value instead of using late
   final double enemyHorizontalSpacing = 50.0;
   final double enemyVerticalSpacing = 40.0;
 
@@ -69,14 +70,44 @@ class GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(Duration.zero, () {
-      screenWidth = MediaQuery.of(context).size.width;
-      screenHeight = MediaQuery.of(context).size.height;
-      startGame();
+    // Register observer for screen size changes
+    WidgetsBinding.instance.addObserver(this);
 
-      // Set focus to enable keyboard input
-      _focusNode.requestFocus();
+    // Defer game start to ensure proper layout
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() {
+          screenWidth = MediaQuery.of(context).size.width;
+          screenHeight = MediaQuery.of(context).size.height;
+          print('Initial screen size: $screenWidth x $screenHeight');
+          startGame();
+        });
+
+        // Set focus to enable keyboard input
+        _focusNode.requestFocus();
+      }
     });
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    // This is called when screen metrics change (like window resize)
+    if (kIsWeb && gameRunning && mounted) {
+      // Update screen dimensions if context is available
+      if (context != null) {
+        setState(() {
+          screenWidth = MediaQuery.of(context).size.width;
+          screenHeight = MediaQuery.of(context).size.height;
+        });
+
+        // Restart game to adjust enemy columns
+        if (gameTimer != null && gameTimer!.isActive) {
+          gameTimer!.cancel();
+        }
+        startGame();
+      }
+    }
   }
 
   void startGame() {
@@ -91,6 +122,10 @@ class GameScreenState extends State<GameScreen> {
       level = 1;
       autoFireCounter = 0;
 
+      // Calculate number of columns based on screen width
+      // Base size is 8 columns for ~400px width, then scale accordingly
+      enemyCols = max(8, (screenWidth / 50).floor());
+
       // Create enemy formation
       createEnemies();
 
@@ -101,17 +136,35 @@ class GameScreenState extends State<GameScreen> {
   }
 
   void createEnemies() {
-    double startX = (screenWidth - (enemyCols * enemyHorizontalSpacing)) / 2 + 25;
-    double startY = 50.0;
+    // Calculate spacing based on screen width to ensure enemies fit
+    double actualHorizontalSpacing = min(
+        enemyHorizontalSpacing,
+        (screenWidth * 0.9) / enemyCols
+    );
+
+    double startX = (screenWidth - (enemyCols * actualHorizontalSpacing)) / 2;
+    double startY = 80.0; // Increased from 50.0 to make enemies more visible
+
+    // Debug output
+    print('Creating enemies: Screen width: $screenWidth, Columns: $enemyCols');
+    print('Spacing: $actualHorizontalSpacing, StartX: $startX');
 
     for (int row = 0; row < enemyRows; row++) {
       for (int col = 0; col < enemyCols; col++) {
-        double x = startX + col * enemyHorizontalSpacing;
+        double x = startX + col * actualHorizontalSpacing;
         double y = startY + row * enemyVerticalSpacing;
         int pointValue = (enemyRows - row) * 10; // Higher rows worth more points
         enemies.add(Enemy(x, y, 40, 30, pointValue));
+
+        // Debug the position of the first and last enemy in the first row
+        if (row == 0 && (col == 0 || col == enemyCols - 1)) {
+          print('Enemy at col $col: x=$x, y=$y');
+        }
       }
     }
+
+    // Log the number of enemies created
+    print('Created ${enemies.length} enemies (${enemyCols} columns) for width: $screenWidth');
   }
 
   void firePlayerBullet() {
@@ -273,14 +326,17 @@ class GameScreenState extends State<GameScreen> {
 
   void endGame() {
     gameRunning = false;
-    gameTimer.cancel();
+    if (gameTimer != null && gameTimer!.isActive) {
+      gameTimer!.cancel();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _focusNode.dispose();
-    if (gameTimer.isActive) {
-      gameTimer.cancel();
+    if (gameTimer != null && gameTimer!.isActive) {
+      gameTimer!.cancel();
     }
     super.dispose();
   }
@@ -316,6 +372,11 @@ class GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Update screen dimensions in case they changed
+    final mediaQuery = MediaQuery.of(context);
+    screenWidth = mediaQuery.size.width;
+    screenHeight = mediaQuery.size.height;
+
     return Scaffold(
       backgroundColor: Colors.black,
       // Wrap with RawKeyboardListener for keyboard controls
@@ -335,20 +396,16 @@ class GameScreenState extends State<GameScreen> {
               },
               child: Stack(
                 children: [
-                  // Draw player
+                  // Draw player - Custom spaceship pointing up
                   Positioned(
                     left: player.x,
-                    top: player.y,
+                    top: player.y -20,
                     child: Container(
                       width: player.width,
                       height: player.height,
-                      color: Colors.green,
-                      child: const Center(
-                        child: Icon(
-                          Icons.arrow_upward,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                      child: CustomPaint(
+                        painter: SpaceshipPainter(),
+                        size: Size(player.width, player.height),
                       ),
                     ),
                   ),
@@ -360,11 +417,11 @@ class GameScreenState extends State<GameScreen> {
                     child: Container(
                       width: enemy.width,
                       height: enemy.height,
-                      color: Colors.red,
+                      //color: Colors.red.withOpacity(0.3), // Added visible background for debugging
                       child: const Center(
                         child: Text(
                           '👾',
-                          style: TextStyle(fontSize: 16),
+                          style: TextStyle(fontSize: 16, color: Colors.white),
                         ),
                       ),
                     ),
@@ -418,6 +475,23 @@ class GameScreenState extends State<GameScreen> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
+                      ),
+                    ),
+                  ),
+
+                  // Debug display for enemy count and size
+                  Positioned(
+                    bottom: 30,
+                    left: 10,
+                    child: Container(
+                      padding: EdgeInsets.all(8),
+                      color: Colors.black.withOpacity(0.7),
+                      child: Text(
+                        'Enemies: ${enemies.length} (${enemyCols}x$enemyRows)\nScreen: ${screenWidth.toInt()}x${screenHeight.toInt()}',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                        ),
                       ),
                     ),
                   ),
@@ -628,5 +702,82 @@ class Explosion extends GameObject {
 
   void update() {
     frameCount++;
+  }
+}
+
+// Custom painter for the spaceship
+class SpaceshipPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.lightBlue
+      ..style = PaintingStyle.fill;
+
+    final bodyPath = Path();
+
+    // Main body triangle (pointing up)
+    bodyPath.moveTo(size.width * 0.5, 0);  // Top center point
+    bodyPath.lineTo(size.width * 0.2, size.height * 0.8);  // Bottom left
+    bodyPath.lineTo(size.width * 0.8, size.height * 0.8);  // Bottom right
+    bodyPath.close();
+
+    // Draw the main body
+    canvas.drawPath(bodyPath, paint);
+
+    // Wings
+    final wingPaint = Paint()
+      ..color = Colors.blueAccent
+      ..style = PaintingStyle.fill;
+
+    // Left wing
+    final leftWing = Path();
+    leftWing.moveTo(size.width * 0.15, size.height * 0.7);
+    leftWing.lineTo(0, size.height);
+    leftWing.lineTo(size.width * 0.25, size.height * 0.8);
+    leftWing.close();
+
+    // Right wing
+    final rightWing = Path();
+    rightWing.moveTo(size.width * 0.85, size.height * 0.7);
+    rightWing.lineTo(size.width, size.height);
+    rightWing.lineTo(size.width * 0.75, size.height * 0.8);
+    rightWing.close();
+
+    // Draw wings
+    canvas.drawPath(leftWing, wingPaint);
+    canvas.drawPath(rightWing, wingPaint);
+
+    // Cockpit / window
+    final windowPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.5, size.height * 0.4),
+        width: size.width * 0.2,
+        height: size.height * 0.15,
+      ),
+      windowPaint,
+    );
+
+    // Engine flames
+    final flamePaint = Paint()
+      ..color = Colors.orangeAccent
+      ..style = PaintingStyle.fill;
+
+    final flamePath = Path();
+    flamePath.moveTo(size.width * 0.35, size.height * 0.8);
+    flamePath.lineTo(size.width * 0.45, size.height);
+    flamePath.lineTo(size.width * 0.55, size.height);
+    flamePath.lineTo(size.width * 0.65, size.height * 0.8);
+    flamePath.close();
+
+    canvas.drawPath(flamePath, flamePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return false;
   }
 }
