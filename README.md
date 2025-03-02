@@ -1,4 +1,4 @@
-# space_invaders_claude_ai
+# Space Invaders - Atari Classic Game
 
 A new Flutter project.
 
